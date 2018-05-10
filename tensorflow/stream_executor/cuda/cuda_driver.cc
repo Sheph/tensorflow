@@ -530,6 +530,7 @@ bool DeviceOptionsToContextFlags(const DeviceOptions &device_options,
                 << " exists before initializing the StreamExecutor. The "
                 << "primary context is now " << new_context << ". We "
                 << "haven't verified StreamExecutor works with that.";
+            new_context = former_context;
           }
         }
       } else {

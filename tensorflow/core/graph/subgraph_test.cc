@@ -117,7 +117,7 @@ class SubgraphTest : public ::testing::Test {
 
     subgraph::RewriteGraphMetadata metadata;
     Status s = subgraph::RewriteGraphForExecution(
-        subgraph, fed, fetch, targets, device_info_, use_function_convention,
+        subgraph, fed, fetch, targets, device_info_, DeviceSet(), use_function_convention,
         &metadata);
     if (!s.ok()) {
       delete subgraph;
@@ -376,7 +376,7 @@ static void BM_SubgraphHelper(int iters, int num_nodes,
     CopyGraph(g, subgraph);
     subgraph::RewriteGraphMetadata metadata;
     TF_CHECK_OK(subgraph::RewriteGraphForExecution(
-        subgraph, fed, fetch, targets, device_info, use_function_convention,
+        subgraph, fed, fetch, targets, device_info, DeviceSet(), use_function_convention,
         &metadata));
     delete subgraph;
   }

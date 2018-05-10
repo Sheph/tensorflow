@@ -249,7 +249,7 @@ Status GraphExecutionState::InitBaseGraph(const BuildGraphOptions& options) {
     rewrite_metadata_.reset(new subgraph::RewriteGraphMetadata);
     TF_RETURN_IF_ERROR(subgraph::RewriteGraphForExecution(
         new_graph.get(), options.feed_endpoints, options.fetch_endpoints,
-        options.target_nodes, device_set_->client_device()->attributes(),
+        options.target_nodes, device_set_->client_device()->attributes(), *device_set_,
         options.use_function_convention, rewrite_metadata_.get()));
   }
 
@@ -398,7 +398,7 @@ Status GraphExecutionState::BuildGraph(const BuildGraphOptions& options,
     // ops as needed.
     TF_RETURN_IF_ERROR(subgraph::RewriteGraphForExecution(
         ng.get(), options.feed_endpoints, options.fetch_endpoints,
-        options.target_nodes, device_set_->client_device()->attributes(),
+        options.target_nodes, device_set_->client_device()->attributes(), *device_set_,
         options.use_function_convention, &rewrite_metadata));
   } else {
     // This GraphExecutionState represents a graph that was

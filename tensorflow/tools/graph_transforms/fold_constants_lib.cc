@@ -266,7 +266,7 @@ Status FoldConstants(const GraphDef& input_graph_def,
 
   subgraph::RewriteGraphMetadata unused_metadata;
   TF_RETURN_IF_ERROR(subgraph::RewriteGraphForExecution(
-      &input_graph, context.input_names, context.output_names, {}, {},
+      &input_graph, context.input_names, context.output_names, {}, {}, DeviceSet(),
       false /* use_function_convention */, &unused_metadata));
 
   ConstantFoldingOptions cf_opts;

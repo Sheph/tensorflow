@@ -1905,7 +1905,7 @@ tf_cuda_library(
         "graph/tensor_id.cc",
         "graph/validate.cc",
     ],
-    hdrs = GRAPH_HDRS,
+    hdrs = GRAPH_HDRS + [ "common_runtime/device_set.h", "common_runtime/device.h" ],
     deps = [
         ":framework",
         ":framework_internal",

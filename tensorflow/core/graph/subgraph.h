@@ -22,6 +22,7 @@ limitations under the License.
 #include "tensorflow/core/graph/graph.h"
 #include "tensorflow/core/lib/core/status.h"
 #include "tensorflow/core/lib/gtl/array_slice.h"
+#include "tensorflow/core/common_runtime/device_set.h"
 
 namespace tensorflow {
 namespace subgraph {
@@ -68,7 +69,7 @@ Status RewriteGraphForExecution(
     Graph* g, const gtl::ArraySlice<string>& fed_outputs,
     const gtl::ArraySlice<string>& fetch_outputs,
     const gtl::ArraySlice<string>& target_node_names,
-    const DeviceAttributes& device_info, bool use_function_convention,
+    const DeviceAttributes& device_info, const DeviceSet& force_devices, bool use_function_convention,
     RewriteGraphMetadata* out_metadata);
 
 typedef std::unordered_map<StringPiece, Node*, StringPieceHasher> NameIndex;

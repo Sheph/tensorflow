@@ -26,6 +26,11 @@ TensorId ParseTensorName(const string& name) {
 }
 
 TensorId ParseTensorName(StringPiece name) {
+  StringPiece::size_type apos =  name.find('*');
+  if (apos != StringPiece::npos) {
+      name = name.substr(0, apos);
+  }
+
   // Parse either a name, ^name, or name:digits.  To do so, we go backwards from
   // the end of the string, skipping over a run of digits.  If we hit a ':'
   // character, then we know we are in the 'name:digits' regime.  Otherwise, we

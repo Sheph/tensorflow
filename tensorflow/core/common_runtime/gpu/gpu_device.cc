@@ -62,6 +62,7 @@ limitations under the License.
 #include "tensorflow/core/util/device_name_utils.h"
 #include "tensorflow/core/util/env_var.h"
 #include "tensorflow/core/util/stream_executor_util.h"
+#include "cuda/include/cuda.h"
 
 namespace tensorflow {
 
@@ -781,6 +782,8 @@ Status BaseGPUDeviceFactory::CreateDevices(const SessionOptions& options,
     n = valid_gpu_ids.size();
   }
   if (!valid_gpu_ids.empty()) {
+    CUcontext old_ctx = NULL;
+    CUresult old_ctx_res = cuCtxGetCurrent(&old_ctx);
     // Save the original device.
     int original_device = 0;
     cudaError_t err = cudaGetDevice(&original_device);
@@ -808,6 +811,9 @@ Status BaseGPUDeviceFactory::CreateDevices(const SessionOptions& options,
     if (err != cudaSuccess) {
       return errors::Internal("cudaSetDevice() on GPU:", original_device,
                               " failed. Status: ", cudaGetErrorString(err));
+    }
+    if (old_ctx_res == CUDA_SUCCESS) {
+      cuCtxSetCurrent(old_ctx);
     }
   }
   for (int i = 0; i < n; i++) {

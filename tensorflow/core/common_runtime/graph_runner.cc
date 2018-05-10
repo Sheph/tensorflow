@@ -146,7 +146,7 @@ Status GraphRunner::Run(Graph* graph, FunctionLibraryRuntime* function_library,
   subgraph::RewriteGraphMetadata metadata;
   TF_RETURN_IF_ERROR(subgraph::RewriteGraphForExecution(
       graph_to_run.get(), input_names, output_names, {} /* target nodes */,
-      cpu_device_->attributes(), false /* use_function_convention */,
+      cpu_device_->attributes(), DeviceSet(), false /* use_function_convention */,
       &metadata));
 
   // Create the local executor and the Rendezvous for fetching back the

@@ -44,6 +44,32 @@ namespace tensorflow {
 
 namespace {
 
+
+static DeviceAttributes GetDeviceAttributesForTensor(const std::string& tensor_name,
+    const DeviceAttributes& device_info, const DeviceSet& force_devices)
+{
+    std::string::size_type pos = tensor_name.find_first_of("*");
+    if (pos == std::string::npos) {
+        return device_info;
+    }
+    std::string gpu_id_str = tensor_name.substr(pos + 1);
+    std::istringstream is(gpu_id_str);
+    int gpu_id = 0;
+    if (!(is >> gpu_id)) {
+        LOG(ERROR) << "bad gpu_id " << gpu_id_str << " in tensor name " << tensor_name;
+        return device_info;
+    }
+    std::ostringstream os;
+    os << "/job:localhost/replica:0/task:0/device:GPU:" << gpu_id;
+    gpu_id_str = os.str();
+    Device* dev = force_devices.FindDeviceByName(gpu_id_str);
+    if (!dev) {
+        LOG(ERROR) << "device " << gpu_id_str << " not found, tensor name is " << tensor_name;
+        return device_info;
+    }
+    return dev->attributes();
+}
+
 // Rewrite graph by replacing the output tensors specified in
 // "fed_outputs" with special feed nodes for each specified output
 // tensor, and removing any nodes that are now disconnected from the
@@ -54,6 +80,7 @@ namespace {
 // an appropriate error message (and *g is left in an indeterminate
 // state).
 static Status FeedInputs(Graph* g, const DeviceAttributes& device_info,
+                         const DeviceSet& force_devices,
                          const gtl::ArraySlice<string>& fed_outputs,
                          bool use_function_convention,
                          subgraph::NameIndex* name_index,
@@ -62,6 +89,7 @@ static Status FeedInputs(Graph* g, const DeviceAttributes& device_info,
   out_feed_types->reserve(fed_outputs.size());
   for (size_t i = 0; i < fed_outputs.size(); ++i) {
     const string& t = fed_outputs[i];
+    DeviceAttributes attribs = GetDeviceAttributesForTensor(t, device_info, force_devices);
     TensorId id(ParseTensorName(t));
 
     auto iter = name_index->find(id.first);
@@ -83,10 +111,10 @@ static Status FeedInputs(Graph* g, const DeviceAttributes& device_info,
                       "_Recv")
               .Attr("tensor_type", BaseType(n->output_type(id.second)))
               .Attr("tensor_name", t)
-              .Attr("send_device", device_info.name())
-              .Attr("recv_device", device_info.name())
+              .Attr("send_device", attribs.name())
+              .Attr("recv_device", attribs.name())
               .Attr("send_device_incarnation",
-                    static_cast<int64>(device_info.incarnation()))
+                    static_cast<int64>(attribs.incarnation()))
               .Attr("client_terminated", true)
               .Finalize(g, &recv_node));
     } else {
@@ -101,7 +129,7 @@ static Status FeedInputs(Graph* g, const DeviceAttributes& device_info,
                              .Attr("index", static_cast<int32>(i))
                              .Finalize(g, &recv_node));
     }
-    recv_node->set_assigned_device_name(device_info.name());
+    recv_node->set_assigned_device_name(attribs.name());
 
     // Update name_index
     (*name_index)[recv_node->name()] = recv_node;
@@ -186,6 +214,7 @@ static Status PruneForTargets(Graph* g, const subgraph::NameIndex& name_index,
 namespace subgraph {
 
 Status FetchOutputs(Graph* g, const DeviceAttributes& device_info,
+                    const DeviceSet& force_devices,
                     const gtl::ArraySlice<string>& fetch_outputs,
                     bool use_function_convention, NameIndex* name_index,
                     std::vector<Node*>* out_fetch_nodes,
@@ -194,6 +223,7 @@ Status FetchOutputs(Graph* g, const DeviceAttributes& device_info,
   out_fetch_nodes->reserve(fetch_outputs.size());
   for (size_t i = 0; i < fetch_outputs.size(); ++i) {
     const string& t = fetch_outputs[i];
+    DeviceAttributes attribs = GetDeviceAttributesForTensor(t, device_info, force_devices);
 
     // Parse t into node_name and output_index.
     TensorId id(ParseTensorName(t));
@@ -230,10 +260,10 @@ Status FetchOutputs(Graph* g, const DeviceAttributes& device_info,
                       "_Send")
               .Input(n, id.second)
               .Attr("tensor_name", t)
-              .Attr("send_device", device_info.name())
-              .Attr("recv_device", device_info.name())
+              .Attr("send_device", attribs.name())
+              .Attr("recv_device", attribs.name())
               .Attr("send_device_incarnation",
-                    static_cast<int64>(device_info.incarnation()))
+                    static_cast<int64>(attribs.incarnation()))
               .Attr("client_terminated", true)
               .Finalize(g, &send_node));
     } else {
@@ -249,7 +279,7 @@ Status FetchOutputs(Graph* g, const DeviceAttributes& device_info,
                              .Attr("index", static_cast<int32>(i))
                              .Finalize(g, &send_node));
     }
-    send_node->set_assigned_device_name(device_info.name());
+    send_node->set_assigned_device_name(attribs.name());
 
     // Update the index.
     (*name_index)[send_node->name()] = send_node;
@@ -266,7 +296,7 @@ Status RewriteGraphForExecution(
     Graph* g, const gtl::ArraySlice<string>& fed_outputs,
     const gtl::ArraySlice<string>& fetch_outputs,
     const gtl::ArraySlice<string>& target_node_names,
-    const DeviceAttributes& device_info, bool use_function_convention,
+    const DeviceAttributes& device_info, const DeviceSet& force_devices, bool use_function_convention,
     RewriteGraphMetadata* out_metadata) {
   if (fetch_outputs.empty() && target_node_names.empty()) {
     return errors::InvalidArgument(
@@ -300,7 +330,7 @@ Status RewriteGraphForExecution(
   // currently listed in "fetch_nodes".  We pass "name_index" so the index is
   // kept up to date.
   if (!fed_outputs.empty()) {
-    TF_RETURN_IF_ERROR(FeedInputs(g, device_info, fed_outputs,
+    TF_RETURN_IF_ERROR(FeedInputs(g, device_info, force_devices, fed_outputs,
                                   use_function_convention, &name_index,
                                   &out_metadata->feed_types));
   }
@@ -308,7 +338,7 @@ Status RewriteGraphForExecution(
   // Add the fetch nodes, also updating "name_index".
   std::vector<Node*> fetch_nodes;
   if (!fetch_outputs.empty()) {
-    TF_RETURN_IF_ERROR(FetchOutputs(g, device_info, fetch_outputs,
+    TF_RETURN_IF_ERROR(FetchOutputs(g, device_info, force_devices, fetch_outputs,
                                     use_function_convention, &name_index,
                                     &fetch_nodes, &out_metadata->fetch_types));
   }
